@@ -6,18 +6,30 @@
 #include <thread>
 #include <vector>
 #include <pistache/endpoint.h>
+#include <memory>
+class Timer;
+class WebHandler : public Pistache::Http::Handler
+{
+HTTP_PROTOTYPE(WebHandler)
+  void onRequest(const Pistache:: Http::Request& request, Pistache::Http::ResponseWriter response);
+public :
 
-class Timer : public Pistache::Http::Handler
+  void setTimer(Timer* timer);
+
+private:
+ Timer* m_timer;
+};
+class Timer 
 {
  public:
-  HTTP_PROTOTYPE(Timer)
+  
   enum class Color
   {
     Red, Green, Blue
       };
   Timer();
   ~Timer();
-  void onRequest(const Pistache:: Http::Request& request, Pistache::Http::ResponseWriter response);
+
   void reset();
   void start();
   void stop();
@@ -53,5 +65,6 @@ class Timer : public Pistache::Http::Handler
   unsigned int                                  m_displayDigitCount;
   Color                                         m_color;
   std::thread                                   m_webThread;
+ std::shared_ptr<WebHandler>			m_webHandler;
 };
 

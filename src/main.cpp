@@ -21,13 +21,13 @@ int main()
   std::array<char, 4> arr = { 'a','b','c','d' };
 
   //time.debugSetToDisplay(arr);
-  time.start();
+ /* time.start();
   std::cin.get();
   time.stop();
   std::cin.get();
   time.start();
   std::cin.get();
-  time.stop();
+  time.stop();*/
   std::cin.get();
   return 0;
 }

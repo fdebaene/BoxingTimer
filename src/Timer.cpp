@@ -7,7 +7,14 @@
 #include <map>
 #include <algorithm>
 #include <sstream>
+Timer* timer=0;
 std::map<char, int> reverse;
+void WebHandler::setTimer(Timer* timer)
+{
+m_timer=timer;
+}
+
+
 Timer::Timer() :
   m_defaultTimer(3 * 60),
   m_running(false),
@@ -37,7 +44,9 @@ Timer::Timer() :
   reverse[(char)0b11100001] = 7;
   reverse[(char)0b11111111] = 8;
   reverse[(char)0b11110111] = 9;
-  
+  m_webHandler=std::make_shared<WebHandler>();
+   m_webHandler->setTimer(this);
+timer=this;
   m_webThread=std::thread(&Timer::runWebServer,this);
 }
 
@@ -47,32 +56,34 @@ Timer::~Timer()
 }
 void Timer::runWebServer()
 {
+
   Pistache:: Address addr(Pistache::Ipv4::any(), Pistache::Port(9080));
   auto opts = Pistache::Http::Endpoint::options().threads(1);
   Pistache::Http::Endpoint server(addr);
   server.init(opts);
-  server.setHandler(std::make_shared<Timer>(this));
+  server.setHandler(m_webHandler);
   server.serve();
 
 }
-void Timer::onRequest(const Pistache::Http::Request& request, Pistache::Http::ResponseWriter response)
+void WebHandler::onRequest(const Pistache::Http::Request& request, Pistache::Http::ResponseWriter response)
 {
-  if (request.ressource() == "getcurrenttime")
+
+  if (request.resource() == "/getcurrenttime")
     {
       int min,sec;
-      getTimeLeft(min,sec);
+      m_timer->getTimeLeft(min,sec);
       std::stringstream ss;
       ss<<min<<":"<<sec;
       response.send(Pistache::Http::Code::Ok, ss.str());
     }
-  if (request.resource() == "start")
-      start();
-  if (request.resource() == "stop")
-      stop();
-  if (request.resource() == "next")
-      next();
-  if (request.resource() == "reset")
-      reset();
+  if (request.resource() == "/start")
+      timer->start();
+  if (request.resource() == "/stop")
+      timer->stop();
+  if (request.resource() == "/next")
+      timer->next();
+  if (request.resource() == "/reset")
+      timer->reset();
 
   response.send(Pistache::Http::Code::Ok, "");
  }
@@ -94,7 +105,6 @@ void Timer::start()
   m_lastMeasure = std::chrono::system_clock::now();
   lock.unlock();
   m_displayThread = std::thread(&Timer::run, this);
-  
 }
 void Timer::stop() 
 {
@@ -132,7 +142,7 @@ void Timer::display()
       m_displayDigitCount = 0;
       updateToDisplay();
 #ifndef RPI
-      system("CLS");
+      system("clear");
 #endif
     }
   std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -179,6 +189,7 @@ void Timer::debugSetDuration(int second)
 
 void Timer::run()
 {
+
   std::unique_lock<decltype(m_mutex)> lock(m_mutex);
   auto running = m_running;
   lock.unlock();
