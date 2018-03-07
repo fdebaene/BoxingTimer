@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="/script/jquery.js"></script>
+    <script>
+      $(document).ready(function(){
+           $("button").click(function(){
+            $.get("/command/start", function(data,status){
+              alert("Data:"+data+"\nStatus: "+status);
+               });
+           });
+      
+      });
+    </script>
+  </head>
+  <body>
+    <button>Start</button>
+  </body>
+  </html>
