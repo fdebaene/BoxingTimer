@@ -10,7 +10,9 @@
 class Timer;
 class WebHandler : public Pistache::Http::Handler
 {
+
 HTTP_PROTOTYPE(WebHandler)
+
   void onRequest(const Pistache:: Http::Request& request, Pistache::Http::ResponseWriter response);
 public :
 
@@ -43,11 +45,12 @@ class Timer
   void setStack(std::vector<int> stack);
   bool getTimeLeft(int& minutes, int& second);
   void runWebServer();
-			
+  std::deque<int> getModelStack();
   //private:
   void display();
   void updateToDisplay();
   void run();
+  void runDisplay();
   void updateClock();
 
  private:
@@ -61,7 +64,9 @@ class Timer
   std::chrono::system_clock::time_point         m_lastMeasure;
   std::chrono::system_clock::duration           m_duration;
   std::array<char, 10>                          m_convertArray;
+  std::thread                                   m_clockThread;
   std::thread                                   m_displayThread;
+
   unsigned int                                  m_displayDigitCount;
   Color                                         m_color;
   std::thread                                   m_webThread;

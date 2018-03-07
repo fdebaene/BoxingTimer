@@ -11,7 +11,7 @@ Timer* timer=0;
 std::map<char, int> reverse;
 void WebHandler::setTimer(Timer* timer)
 {
-m_timer=timer;
+  m_timer=timer;
 }
 
 
@@ -21,8 +21,12 @@ Timer::Timer() :
   m_todisplay({ 0 }),
   m_displayDigitCount(0),
   m_intervalTimer(10000),
-  m_duration(std::chrono::seconds(3 * 60))
+  m_duration(std::chrono::seconds(0))
 {
+  addToStack(10);
+  addToStack(20);
+  addToStack(30);
+  m_duration=std::chrono::seconds(m_stack.front());
   m_convertArray[0] = (char)0b11111101;//0
   m_convertArray[1] = (char)0b01100001;//1
   m_convertArray[2] = (char)0b11011011;//2
@@ -45,9 +49,10 @@ Timer::Timer() :
   reverse[(char)0b11111111] = 8;
   reverse[(char)0b11110111] = 9;
   m_webHandler=std::make_shared<WebHandler>();
-   m_webHandler->setTimer(this);
-timer=this;
+  m_webHandler->setTimer(this);
+  timer=this;
   m_webThread=std::thread(&Timer::runWebServer,this);
+  m_displayThread=std::thread(&Timer::runDisplay,this);
 }
 
 
@@ -63,17 +68,26 @@ void Timer::runWebServer()
   server.init(opts);
   server.setHandler(m_webHandler);
   server.serve();
-
 }
 void WebHandler::onRequest(const Pistache::Http::Request& request, Pistache::Http::ResponseWriter response)
 {
-
   if (request.resource() == "/getcurrenttime")
     {
       int min,sec;
-      m_timer->getTimeLeft(min,sec);
+      timer->getTimeLeft(min,sec);
       std::stringstream ss;
       ss<<min<<":"<<sec;
+      response.send(Pistache::Http::Code::Ok, ss.str());
+    }
+   if (request.resource() == "/getcurrentStack")
+    {
+      auto stack= timer->getModelStack();
+      std::stringstream ss;
+      while (!stack.empty())
+	{
+	  ss<<stack.front()<<"-";
+	  stack.pop_front();
+	}
       response.send(Pistache::Http::Code::Ok, ss.str());
     }
   if (request.resource() == "/start")
@@ -84,9 +98,17 @@ void WebHandler::onRequest(const Pistache::Http::Request& request, Pistache::Htt
       timer->next();
   if (request.resource() == "/reset")
       timer->reset();
-
+  if (request.resource() == "/index.html" ||request.resource() == "/")
+    {
+      response.send(Pistache::Http::Code::Ok, "hello");
+      return;
+    }
   response.send(Pistache::Http::Code::Ok, "");
  }
+std::deque<int> Timer::getModelStack()
+{
+  return m_stackModel;
+}
 void Timer::reset() 
 {
   stop();
@@ -104,7 +126,7 @@ void Timer::start()
   m_running = true;
   m_lastMeasure = std::chrono::system_clock::now();
   lock.unlock();
-  m_displayThread = std::thread(&Timer::run, this);
+  m_clockThread = std::thread(&Timer::run, this);
 }
 void Timer::stop() 
 {
@@ -113,7 +135,7 @@ void Timer::stop()
     return;
   m_running = false;
   lock.unlock();
-  m_displayThread.join();
+  m_clockThread.join();
 }
 void Timer::clear()
 {
@@ -132,6 +154,7 @@ void Timer::next()
     { 
       m_stack.push_back (m_stack.front());
       m_stack.pop_front();
+      m_duration=std::chrono::seconds(m_stack.front());
     }
 }
 void Timer::display()
@@ -142,7 +165,7 @@ void Timer::display()
       m_displayDigitCount = 0;
       updateToDisplay();
 #ifndef RPI
-      system("clear");
+            system("clear");
 #endif
     }
   std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -153,15 +176,14 @@ void Timer::display()
     {
       std::cout << ((m_todisplay[m_displayDigitCount] & (1 << (7-j))) ? "1" : "0");
     }
-
   std::cout<< " = "<<reverse[m_todisplay[m_displayDigitCount]]<< std::endl;
 #endif
 
 }
-void Timer::setDisplayRate(unsigned int hertz)
+void Timer::setDisplayRate(unsigned int Mhertz)
 {
   std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-  m_intervalTimer = 1000000 / hertz;
+  m_intervalTimer = 1000000 /Mhertz;
 }
 void Timer::updateToDisplay()
 {
@@ -170,13 +192,11 @@ void Timer::updateToDisplay()
   unsigned int min = s / 60;
   s %= 60;
   min %= 100;
-  
-  m_todisplay[0]= m_convertArray[min/10];
-  m_todisplay[1] = m_convertArray[min % 10];
+  m_todisplay[0]=  m_convertArray[min/10];
+  m_todisplay[1] = m_convertArray[min%10];
   m_todisplay[2] = m_convertArray[s / 10];
   m_todisplay[3] = m_convertArray[s % 10];
 }
-
 void Timer::debugSetToDisplay(const std::array<char, 4>& data)
 {
   m_todisplay = data;
@@ -184,26 +204,32 @@ void Timer::debugSetToDisplay(const std::array<char, 4>& data)
 void Timer::debugSetDuration(int second)
 {
   m_duration=std::chrono::seconds(125);
-  
 }
-
 void Timer::run()
 {
-
   std::unique_lock<decltype(m_mutex)> lock(m_mutex);
   auto running = m_running;
   lock.unlock();
   while (running)
     {
       updateClock();
+      std::this_thread::yield();
+      lock.lock();
+      running = m_running; 
+      lock.unlock();
+    }
+}
+void Timer::runDisplay()
+{
+  std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+  lock.unlock();
+  while (true)
+    {
       display();
       lock.lock();
       auto wait = std::chrono::microseconds(m_intervalTimer);
       lock.unlock();
       std::this_thread::sleep_for(wait);
-      lock.lock();
-      running = m_running; 
-      lock.unlock();
     }
 }
 
