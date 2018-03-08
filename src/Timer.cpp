@@ -7,6 +7,8 @@
 #include <map>
 #include <algorithm>
 #include <sstream>
+#include <pistache/http_headers.h>
+using namespace Pistache::Http;
 Timer* timer=0;
 std::map<char, int> reverse;
 void WebHandler::setTimer(Timer* timer)
@@ -71,14 +73,19 @@ void Timer::runWebServer()
 }
 void WebHandler::onRequest(const Pistache::Http::Request& request, Pistache::Http::ResponseWriter response)
 {
+  
   if (request.resource() == "/getcurrenttime")
     {
+      response.headers().add<Header::ContentType>(MIME(Text,Plain));
+      response.headers().add<Header::Server>("pistache/0.1");
       int min,sec;
       timer->getTimeLeft(min,sec);
       std::stringstream ss;
       ss<<min<<":"<<sec;
       response.send(Pistache::Http::Code::Ok, ss.str());
     }
+  response.headers().add<Header::ContentType>(MIME(Text,Plain));
+    response.headers().add<Header::Server>("pistache/0.1");
    if (request.resource() == "/getcurrentStack")
     {
       auto stack= timer->getModelStack();
@@ -100,6 +107,7 @@ void WebHandler::onRequest(const Pistache::Http::Request& request, Pistache::Htt
       timer->reset();
   if (request.resource() == "/index.html" ||request.resource() == "/")
     {
+      
       response.send(Pistache::Http::Code::Ok, "hello");
       return;
     }
